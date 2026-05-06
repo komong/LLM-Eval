@@ -38,6 +38,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .toggle input:checked + label { background: #4f46e5; }
 .toggle input:checked + label::after { transform: translateX(22px); }
 
+.toggle-sm { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+.toggle-sm input { display: none; }
+.toggle-sm label { display: block; width: 100%; height: 100%; background: #cbd5e1; border-radius: 20px; cursor: pointer; transition: background 0.2s; }
+.toggle-sm label::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+.toggle-sm input:checked + label { background: #818cf8; }
+.toggle-sm input:checked + label::after { transform: translateX(16px); }
+
+.display-toggles { display: flex; gap: 16px; align-items: center; flex-shrink: 0; }
+.display-toggle-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #64748b; white-space: nowrap; }
+
 .save-bar { position: fixed; bottom: 20px; right: 20px; z-index: 200; }
 .save-bar button { padding: 14px 32px; background: #4f46e5; color: #fff; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(79,70,229,0.4); transition: all 0.2s; }
 .save-bar button:hover { background: #4338ca; transform: translateY(-1px); }
@@ -86,12 +96,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 const API = '';
 let modelConfig = {};
 let originalConfig = '';
+let displayOverrides = {};
 
 (async function init() {
   try {
     const resp = await fetch(API + '/api/models');
     const data = await resp.json();
     modelConfig = data;
+    // 提取显示开关状态
+    displayOverrides = {};
+    for (const [name, cfg] of Object.entries(data)) {
+      displayOverrides[name] = {
+        show_in_summary: cfg.show_in_summary !== false,
+        show_in_score: cfg.show_in_score !== false,
+      };
+    }
     originalConfig = JSON.stringify(data);
     render();
   } catch (e) {
@@ -103,7 +122,7 @@ function render() {
   let html = `
   <div class="section">
     <h2>测试模型管理</h2>
-    <p class="desc">开启/关闭参与 benchmark 测试的模型。修改后点击右下角「保存配置」生效，下次运行 <code>python runner.py</code> 时按新配置执行。</p>`;
+    <p class="desc">开启/关闭参与 benchmark 测试的模型。右侧小开关控制该模型在汇总页和评分页的显示。修改后点击右下角「保存配置」生效。</p>`;
 
   for (const [name, cfg] of Object.entries(modelConfig)) {
     const enabled = cfg.enabled !== false;
@@ -123,6 +142,22 @@ function render() {
           ${cfg.thinking !== undefined ? `<span>thinking: ${cfg.thinking}</span>` : ''}
         </div>
         ${priceStr ? `<div class="model-price">${priceStr}</div>` : ''}
+      </div>
+      <div class="display-toggles">
+        <div class="display-toggle-item">
+          <span>汇总</span>
+          <div class="toggle-sm">
+            <input type="checkbox" id="sum_${name}" ${displayOverrides[name]?.show_in_summary ? 'checked' : ''} onchange="toggleDisplay('${name}', 'show_in_summary', this.checked)">
+            <label for="sum_${name}"></label>
+          </div>
+        </div>
+        <div class="display-toggle-item">
+          <span>评分</span>
+          <div class="toggle-sm">
+            <input type="checkbox" id="scr_${name}" ${displayOverrides[name]?.show_in_score ? 'checked' : ''} onchange="toggleDisplay('${name}', 'show_in_score', this.checked)">
+            <label for="scr_${name}"></label>
+          </div>
+        </div>
       </div>
       <div class="toggle">
         <input type="checkbox" id="chk_${name}" ${enabled ? 'checked' : ''} onchange="toggleModel('${name}', this.checked)">
@@ -149,14 +184,21 @@ function toggleModel(name, enabled) {
   markUnsaved();
 }
 
+function toggleDisplay(name, field, checked) {
+  displayOverrides[name] = displayOverrides[name] || {};
+  displayOverrides[name][field] = checked;
+  markUnsaved();
+}
+
 function markUnsaved() {
   document.getElementById('saveBtn').classList.remove('saved');
   updateStatus();
 }
 
 function updateStatus() {
-  const current = JSON.stringify(modelConfig);
-  const changed = current !== originalConfig;
+  const current = JSON.stringify(modelConfig) + JSON.stringify(displayOverrides);
+  const original = originalConfig;
+  const changed = current !== original;
   const dot = document.getElementById('statusDot');
   const text = document.getElementById('statusText');
   if (changed) {
@@ -171,7 +213,11 @@ function updateStatus() {
 async function saveConfig() {
   const payload = {};
   for (const [name, cfg] of Object.entries(modelConfig)) {
-    payload[name] = cfg.enabled !== false;
+    payload[name] = {
+      enabled: cfg.enabled !== false,
+      show_in_summary: displayOverrides[name]?.show_in_summary !== false,
+      show_in_score: displayOverrides[name]?.show_in_score !== false,
+    };
   }
 
   const resp = await fetch(API + '/api/models', {
@@ -181,7 +227,7 @@ async function saveConfig() {
   const result = await resp.json();
 
   if (result.ok) {
-    originalConfig = JSON.stringify(modelConfig);
+    originalConfig = JSON.stringify(modelConfig) + JSON.stringify(displayOverrides);
     document.getElementById('saveBtn').classList.add('saved');
     updateStatus();
   } else {

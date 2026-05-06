@@ -122,7 +122,7 @@ class ScoreHandler(SimpleHTTPRequestHandler):
             self.send_error(404, f"{filename} not found")
 
     def _get_models_config(self):
-        """返回所有模型配置（含 models_config.json 覆盖的 enabled 状态）"""
+        """返回所有模型配置（含 models_config.json 覆盖的状态）"""
         overrides = {}
         if MODELS_CONFIG_FILE.exists():
             try:
@@ -132,7 +132,20 @@ class ScoreHandler(SimpleHTTPRequestHandler):
         result = {}
         for name in ALL_MODELS:
             detail = dict(MODELS_DETAIL.get(name, {}))
-            detail["enabled"] = overrides.get(name, detail.get("enabled", True))
+            # 兼容旧格式（布尔值）和新格式（对象）
+            override = overrides.get(name, {})
+            if isinstance(override, bool):
+                detail["enabled"] = override
+                detail["show_in_summary"] = True
+                detail["show_in_score"] = True
+            elif isinstance(override, dict):
+                detail["enabled"] = override.get("enabled", detail.get("enabled", True))
+                detail["show_in_summary"] = override.get("show_in_summary", True)
+                detail["show_in_score"] = override.get("show_in_score", True)
+            else:
+                detail["enabled"] = detail.get("enabled", True)
+                detail["show_in_summary"] = True
+                detail["show_in_score"] = True
             result[name] = detail
         return result
 
@@ -148,8 +161,21 @@ class ScoreHandler(SimpleHTTPRequestHandler):
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
             config = json.loads(body)
+            # 标准化：将布尔值转为对象格式
+            normalized = {}
+            for name, val in config.items():
+                if isinstance(val, bool):
+                    normalized[name] = {"enabled": val, "show_in_summary": True, "show_in_score": True}
+                elif isinstance(val, dict):
+                    normalized[name] = {
+                        "enabled": val.get("enabled", True),
+                        "show_in_summary": val.get("show_in_summary", True),
+                        "show_in_score": val.get("show_in_score", True),
+                    }
+                else:
+                    normalized[name] = {"enabled": True, "show_in_summary": True, "show_in_score": True}
             MODELS_CONFIG_FILE.write_text(
-                json.dumps(config, ensure_ascii=False, indent=2),
+                json.dumps(normalized, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
             self._json_response({"ok": True})
@@ -228,8 +254,14 @@ class ScoreHandler(SimpleHTTPRequestHandler):
                 by_model[m] = []
             by_model[m].append(r)
 
+        # 获取模型显示配置，过滤 show_in_summary=false 的模型
+        models_config = self._get_models_config()
+        hidden_models = {name for name, cfg in models_config.items() if not cfg.get("show_in_summary", True)}
+
         models_summary = []
         for model, records in sorted(by_model.items()):
+            if model in hidden_models:
+                continue
             success = [r for r in records if not r.get("error")]
             scored = [r for r in success if r.get("quality_score")]
             latencies = [r["latency_s"] for r in success if r.get("latency_s")]

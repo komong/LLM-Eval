@@ -1,0 +1,32 @@
+{
+  "deepseek-v4-flash": {
+    "enabled": true,
+    "show_in_summary": false,
+    "show_in_score": true
+  },
+  "deepseek-v4-flash-think": {
+    "enabled": false,
+    "show_in_summary": true,
+    "show_in_score": true
+  },
+  "deepseek-v4-pro": {
+    "enabled": true,
+    "show_in_summary": true,
+    "show_in_score": true
+  },
+  "minimax": {
+    "enabled": true,
+    "show_in_summary": true,
+    "show_in_score": true
+  },
+  "minimax-m2.7": {
+    "enabled": true,
+    "show_in_summary": true,
+    "show_in_score": true
+  },
+  "claude-sonnet": {
+    "enabled": false,
+    "show_in_summary": true,
+    "show_in_score": true
+  }
+}

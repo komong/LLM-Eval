@@ -21,8 +21,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .section h2 { font-size: 17px; margin-bottom: 16px; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #f1f5f9; }
-th { background: #f8fafc; font-weight: 600; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+th, td { padding: 10px 14px; text-align: center; border-bottom: 1px solid #f1f5f9; }
+th { background: #f8fafc; font-weight: 600; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; user-select: none; }
+th:hover { background: #eef2ff; color: #4f46e5; }
+th .sort-arrow { font-size: 10px; margin-left: 4px; opacity: 0.4; }
+th .sort-arrow.active { opacity: 1; color: #4f46e5; }
 tr:hover td { background: #f8fafc; }
 
 .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
@@ -35,6 +38,7 @@ tr:hover td { background: #f8fafc; }
 .score-na { color: #94a3b8; text-align: center; }
 .cost-cell { text-align: right; font-family: monospace; }
 .token-cell { text-align: right; font-family: monospace; }
+.score-cell { text-align: center; }
 
 .matrix-table th:first-child, .matrix-table td:first-child { position: sticky; left: 0; background: #fff; z-index: 1; }
 .matrix-table tr:hover td:first-child { background: #f8fafc; }
@@ -90,11 +94,23 @@ tr:hover td { background: #f8fafc; }
 <script>
 const API = '';
 
+function modelShortName(name) {
+  const map = {
+    'deepseek-v4-flash': 'DS V4 Flash',
+    'deepseek-v4-flash-think': 'DS V4 Flash Think',
+    'deepseek-v4-pro': 'DS V4 Pro',
+    'minimax': 'MiniMax M2.5',
+    'minimax-m2.7': 'MiniMax M2.7',
+    'claude-sonnet': 'Claude Sonnet',
+  };
+  return map[name] || name;
+}
+
 function fmtCost(usd, billing) {
   if (billing.display_currency === 'RMB') {
-    return '\u00a5' + (usd * billing.exchange_rate).toFixed(4);
+    return '\u00a5' + (usd * billing.exchange_rate).toFixed(2);
   }
-  return '$' + usd.toFixed(5);
+  return '$' + usd.toFixed(2);
 }
 
 (async function init() {
@@ -159,7 +175,7 @@ function render(data) {
     const costClass = (excludeTP && m.is_token_plan) ? ' cost-cell tp-excluded' : 'cost-cell';
 
     html += `<tr>
-      <td><strong>${m.model}</strong>${tpLabel}</td>
+      <td><strong>${modelShortName(m.model)}</strong>${tpLabel}</td>
       <td>${m.total_runs}</td>
       <td>${m.success}</td>
       <td>${m.scored}</td>
@@ -186,7 +202,7 @@ function render(data) {
     <table class="matrix-table">
       <thead><tr>
         <th>场景</th>
-        ${modelNames.map(m => `<th>${m}</th>`).join('')}
+        ${modelNames.map(m => `<th>${modelShortName(m)}</th>`).join('')}
       </tr></thead>
       <tbody>`;
 
@@ -223,7 +239,7 @@ function render(data) {
     const tpLabel = r.is_token_plan ? '<span class="tp-badge">TP</span>' : '';
     const costClass = (excludeTP && r.is_token_plan) ? ' cost-cell tp-excluded' : 'cost-cell';
     html += `<tr>
-      <td><strong>${r.model}</strong>${tpLabel}</td>
+      <td><strong>${modelShortName(r.model)}</strong>${tpLabel}</td>
       <td>${r.scene}</td>
       <td>${r.runs}</td>
       <td class="token-cell">${formatTokens(r.total_input_tokens)}</td>
@@ -242,12 +258,61 @@ function render(data) {
   }
 
   document.getElementById('content').innerHTML = html;
+  makeSortable();
 }
 
 function formatTokens(n) {
   if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
   if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
   return String(n);
+}
+
+function sortTable(table, colIdx, numeric) {
+  const tbody = table.querySelector('tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const ths = table.querySelectorAll('th');
+  const th = ths[colIdx];
+  const isAsc = th.classList.contains('asc');
+
+  // Reset all arrows
+  ths.forEach(h => { h.classList.remove('asc', 'desc'); const a = h.querySelector('.sort-arrow'); if (a) { a.classList.remove('active'); a.textContent = ''; } });
+
+  rows.sort((a, b) => {
+    const aVal = a.children[colIdx]?.textContent.trim() || '';
+    const bVal = b.children[colIdx]?.textContent.trim() || '';
+    if (numeric) {
+      const aNum = parseFloat(aVal.replace(/[^0-9.-]/g, '')) || 0;
+      const bNum = parseFloat(bVal.replace(/[^0-9.-]/g, '')) || 0;
+      return isAsc ? bNum - aNum : aNum - bNum;
+    }
+    return isAsc ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
+  });
+
+  if (isAsc) {
+    th.classList.add('desc');
+    th.querySelector('.sort-arrow').textContent = ' ↓';
+    th.querySelector('.sort-arrow').classList.add('active');
+  } else {
+    th.classList.add('asc');
+    th.querySelector('.sort-arrow').textContent = ' ↑';
+    th.querySelector('.sort-arrow').classList.add('active');
+  }
+
+  rows.forEach(r => tbody.appendChild(r));
+}
+
+function makeSortable() {
+  document.querySelectorAll('table').forEach(table => {
+    const headers = table.querySelectorAll('th');
+    headers.forEach((th, i) => {
+      const txt = th.textContent.trim();
+      // Skip first column (model/scene name) and usability column for numeric sort
+      const numericCols = ['执行次数', '成功', '已评分', '平均质量', '平均耗时', 'Input Token', 'Output Token', '总 Token', '总费用', '测试次数'];
+      const isNumeric = numericCols.some(c => txt.includes(c));
+      th.innerHTML = txt + '<span class="sort-arrow"></span>';
+      th.onclick = () => sortTable(table, i, isNumeric);
+    });
+  });
 }
 </script>
 
