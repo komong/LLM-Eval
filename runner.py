@@ -31,6 +31,7 @@ MODELS = {
         "price_input": 1.0,
         "price_output": 2.0,
         "thinking": False,
+        "enabled": True,
     },
     "deepseek-v4-flash-think": {
         "provider": "deepseek",
@@ -40,6 +41,7 @@ MODELS = {
         "price_input": 1.0,
         "price_output": 2.0,
         "thinking": True,
+        "enabled": False,
     },
     "deepseek-v4-pro": {
         "provider": "deepseek",
@@ -50,6 +52,7 @@ MODELS = {
         "price_input": 3.0,
         "price_output": 6.0,
         "thinking": False,
+        "enabled": True,
     },
     "minimax": {
         "provider": "minimax",
@@ -59,6 +62,19 @@ MODELS = {
         # Token Plan 价格 (USD per 1M tokens)
         "price_input": 0.20,
         "price_output": 0.55,
+        "is_token_plan": True,
+        "enabled": True,
+    },
+    "minimax-m2.7": {
+        "provider": "minimax",
+        "api_base": "https://api.minimax.chat/v1",
+        "model_id": "MiniMax-M2.7",
+        "api_key_env": "MINIMAX_API_KEY",
+        # Token Plan 价格 (USD per 1M tokens)
+        "price_input": 0.20,
+        "price_output": 0.55,
+        "is_token_plan": True,
+        "enabled": True,
     },
     "claude-sonnet": {
         "provider": "anthropic",
@@ -67,12 +83,14 @@ MODELS = {
         "api_key_env": "CLAUDE_API_KEY",
         "price_input": 3.00,
         "price_output": 15.00,
+        "enabled": True,
     },
 }
 
 RESULTS_DIR = Path(__file__).parent / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 LATEST_FILE = RESULTS_DIR / "latest.json"
+MODELS_CONFIG_FILE = Path(__file__).parent / "models_config.json"
 
 
 # ── API 调用 ──────────────────────────────────────────
@@ -213,6 +231,7 @@ async def run_single(model_name: str, model_cfg: dict, prompt_item: dict, client
             "cost_usd": round(cost, 6),
             "output": result["content"],
             "error": None,
+            "is_token_plan": model_cfg.get("is_token_plan", False),
             # 评分留空，事后填
             "quality_score": None,
             "usability": None,
@@ -234,6 +253,7 @@ async def run_single(model_name: str, model_cfg: dict, prompt_item: dict, client
             "cost_usd": 0,
             "output": None,
             "error": str(e),
+            "is_token_plan": model_cfg.get("is_token_plan", False),
             "quality_score": None,
             "usability": None,
             "notes": None,
@@ -258,9 +278,22 @@ async def main(args):
     if args.model:
         models = {k: v for k, v in MODELS.items() if k == args.model}
 
-    # 过滤掉没有配置 API Key 的模型
+    # 读取 models_config.json 覆盖 enabled 状态
+    if MODELS_CONFIG_FILE.exists():
+        try:
+            config_data = json.loads(MODELS_CONFIG_FILE.read_text(encoding="utf-8"))
+            for name, enabled in config_data.items():
+                if name in models:
+                    models[name]["enabled"] = enabled
+        except Exception:
+            pass
+
+    # 过滤：移除已禁用 + 未配置 API Key 的模型
     active_models = {}
     for name, cfg in models.items():
+        if not cfg.get("enabled", True):
+            print(f"⏭ 跳过 {name}: 已禁用")
+            continue
         key = os.getenv(cfg["api_key_env"], "")
         if key and "your_" not in key:
             active_models[name] = cfg

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>模型管理 - 模型评测系统</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; display: flex; min-height: 100vh; }
+
+.sidebar { width: 220px; background: #fff; color: #475569; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 200; border-right: 1px solid #e2e8f0; }
+.sidebar-brand { padding: 20px 20px 16px; font-size: 16px; font-weight: 700; color: #1e293b; border-bottom: 1px solid #e2e8f0; letter-spacing: 0.5px; }
+.sidebar-nav { flex: 1; padding: 12px 0; }
+.sidebar-nav a { display: flex; align-items: center; gap: 10px; padding: 10px 20px; color: #64748b; text-decoration: none; font-size: 14px; transition: all 0.15s; border-left: 3px solid transparent; }
+.sidebar-nav a:hover { color: #1e293b; background: #f1f5f9; }
+.sidebar-nav a.active { color: #4f46e5; background: #eef2ff; border-left-color: #4f46e5; }
+
+.main { margin-left: 220px; flex: 1; padding: 24px 32px; min-height: 100vh; max-width: 900px; }
+
+.section { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.section h2 { font-size: 17px; margin-bottom: 8px; color: #1e293b; }
+.section .desc { font-size: 13px; color: #64748b; margin-bottom: 20px; }
+
+.model-row { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 10px; transition: background 0.15s; }
+.model-row:hover { background: #f8fafc; }
+.model-row.disabled { opacity: 0.55; }
+.model-info { flex: 1; min-width: 0; }
+.model-name { font-weight: 600; font-size: 15px; color: #1e293b; }
+.model-meta { font-size: 12px; color: #64748b; margin-top: 3px; display: flex; gap: 12px; flex-wrap: wrap; }
+.model-meta span { white-space: nowrap; }
+.model-price { font-size: 12px; color: #64748b; font-family: monospace; }
+.tp-badge { display: inline-block; background: #fef3c7; color: #92400e; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+
+.toggle { position: relative; width: 48px; height: 26px; flex-shrink: 0; }
+.toggle input { display: none; }
+.toggle label { display: block; width: 100%; height: 100%; background: #cbd5e1; border-radius: 26px; cursor: pointer; transition: background 0.2s; }
+.toggle label::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; background: #fff; border-radius: 50%; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+.toggle input:checked + label { background: #4f46e5; }
+.toggle input:checked + label::after { transform: translateX(22px); }
+
+.save-bar { position: fixed; bottom: 20px; right: 20px; z-index: 200; }
+.save-bar button { padding: 14px 32px; background: #4f46e5; color: #fff; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(79,70,229,0.4); transition: all 0.2s; }
+.save-bar button:hover { background: #4338ca; transform: translateY(-1px); }
+.save-bar button.saved { background: #16a34a; box-shadow: 0 4px 16px rgba(22,163,74,0.4); }
+
+.status-bar { display: flex; align-items: center; gap: 8px; margin-top: 16px; font-size: 13px; color: #64748b; }
+.status-bar .dot { width: 8px; height: 8px; border-radius: 50%; }
+.status-bar .dot.saved { background: #16a34a; }
+.status-bar .dot.unsaved { background: #f59e0b; }
+
+.loading { text-align: center; padding: 60px; color: #94a3b8; font-size: 15px; }
+
+@media (max-width: 700px) {
+  .sidebar { width: 60px; }
+  .sidebar-brand { font-size: 0; padding: 16px 10px; }
+  .sidebar-nav a { padding: 12px 14px; font-size: 0; justify-content: center; }
+  .main { margin-left: 60px; padding: 12px; }
+  .model-row { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .toggle { align-self: flex-end; }
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-brand">模型评测系统</div>
+  <nav class="sidebar-nav">
+    <a href="/score.html">评分</a>
+    <a href="/summary.html">汇总</a>
+    <a href="/models.html" class="active">模型管理</a>
+    <a href="/billing.html">计费设置</a>
+  </nav>
+</div>
+
+<div class="main">
+  <div id="content">
+    <div class="loading">加载模型配置...</div>
+  </div>
+</div>
+
+<div class="save-bar">
+  <button onclick="saveConfig()" id="saveBtn">保存配置</button>
+</div>
+
+<script>
+const API = '';
+let modelConfig = {};
+let originalConfig = '';
+
+(async function init() {
+  try {
+    const resp = await fetch(API + '/api/models');
+    const data = await resp.json();
+    modelConfig = data;
+    originalConfig = JSON.stringify(data);
+    render();
+  } catch (e) {
+    document.getElementById('content').innerHTML = '<div class="loading">加载失败: ' + e.message + '</div>';
+  }
+})();
+
+function render() {
+  let html = `
+  <div class="section">
+    <h2>测试模型管理</h2>
+    <p class="desc">开启/关闭参与 benchmark 测试的模型。修改后点击右下角「保存配置」生效，下次运行 <code>python runner.py</code> 时按新配置执行。</p>`;
+
+  for (const [name, cfg] of Object.entries(modelConfig)) {
+    const enabled = cfg.enabled !== false;
+    const disabledClass = enabled ? '' : ' disabled';
+    const priceStr = cfg.price_input != null
+      ? `输入 $${cfg.price_input} · 输出 $${cfg.price_output} /1M tokens`
+      : '';
+    const tpBadge = cfg.is_token_plan ? '<span class="tp-badge">Token Plan</span>' : '';
+
+    html += `
+    <div class="model-row${disabledClass}">
+      <div class="model-info">
+        <div class="model-name">${escapeHtml(name)} ${tpBadge}</div>
+        <div class="model-meta">
+          <span>provider: ${escapeHtml(cfg.provider)}</span>
+          <span>model_id: ${escapeHtml(cfg.model_id)}</span>
+          ${cfg.thinking !== undefined ? `<span>thinking: ${cfg.thinking}</span>` : ''}
+        </div>
+        ${priceStr ? `<div class="model-price">${priceStr}</div>` : ''}
+      </div>
+      <div class="toggle">
+        <input type="checkbox" id="chk_${name}" ${enabled ? 'checked' : ''} onchange="toggleModel('${name}', this.checked)">
+        <label for="chk_${name}"></label>
+      </div>
+    </div>`;
+  }
+
+  html += `
+    <div class="status-bar">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">配置已加载</span>
+    </div>
+  </div>`;
+
+  document.getElementById('content').innerHTML = html;
+  updateStatus();
+}
+
+function toggleModel(name, enabled) {
+  modelConfig[name].enabled = enabled;
+  const row = document.querySelector(`#chk_${name.replace(/[^a-zA-Z0-9_-]/g, '\\$&')}`).closest('.model-row');
+  row.classList.toggle('disabled', !enabled);
+  markUnsaved();
+}
+
+function markUnsaved() {
+  document.getElementById('saveBtn').classList.remove('saved');
+  updateStatus();
+}
+
+function updateStatus() {
+  const current = JSON.stringify(modelConfig);
+  const changed = current !== originalConfig;
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  if (changed) {
+    dot.className = 'dot unsaved';
+    text.textContent = '配置已修改，未保存';
+  } else {
+    dot.className = 'dot saved';
+    text.textContent = '配置已加载';
+  }
+}
+
+async function saveConfig() {
+  const payload = {};
+  for (const [name, cfg] of Object.entries(modelConfig)) {
+    payload[name] = cfg.enabled !== false;
+  }
+
+  const resp = await fetch(API + '/api/models', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const result = await resp.json();
+
+  if (result.ok) {
+    originalConfig = JSON.stringify(modelConfig);
+    document.getElementById('saveBtn').classList.add('saved');
+    updateStatus();
+  } else {
+    alert('保存失败: ' + (result.error || '未知错误'));
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+
+</body>
+</html>

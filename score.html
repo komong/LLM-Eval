@@ -3,19 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LLM Benchmark 评分</title>
+<title>评分 - 模型评测系统</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; }
-.header { background: #1a1a2e; color: #fff; padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; position: sticky; top: 0; z-index: 100; }
-.header h1 { font-size: 18px; font-weight: 600; }
-.header select, .header button { padding: 8px 16px; border-radius: 8px; border: none; font-size: 14px; cursor: pointer; }
-.header select { background: #2d2d44; color: #fff; }
-.header button { background: #4f46e5; color: #fff; font-weight: 500; }
-.header button:hover { background: #4338ca; }
-.header button.saved { background: #16a34a; }
-.header .status { font-size: 13px; color: #94a3b8; }
-.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; display: flex; min-height: 100vh; }
+
+/* 左侧边栏 */
+.sidebar { width: 220px; background: #fff; color: #475569; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 200; border-right: 1px solid #e2e8f0; }
+.sidebar-brand { padding: 20px 20px 16px; font-size: 16px; font-weight: 700; color: #1e293b; border-bottom: 1px solid #e2e8f0; letter-spacing: 0.5px; }
+.sidebar-nav { flex: 1; padding: 12px 0; }
+.sidebar-nav a { display: flex; align-items: center; gap: 10px; padding: 10px 20px; color: #64748b; text-decoration: none; font-size: 14px; transition: all 0.15s; border-left: 3px solid transparent; }
+.sidebar-nav a:hover { color: #1e293b; background: #f1f5f9; }
+.sidebar-nav a.active { color: #4f46e5; background: #eef2ff; border-left-color: #4f46e5; }
+
+/* 主内容区 */
+.main { margin-left: 220px; flex: 1; padding: 24px 32px; min-height: 100vh; }
+
+.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.toolbar select, .toolbar button { padding: 8px 16px; border-radius: 8px; border: none; font-size: 14px; cursor: pointer; }
+.toolbar select { background: #fff; color: #1e293b; border: 1px solid #e2e8f0; }
+.toolbar button { background: #4f46e5; color: #fff; font-weight: 500; }
+.toolbar button:hover { background: #4338ca; }
+.toolbar button.saved { background: #16a34a; }
+.toolbar .status { font-size: 13px; color: #64748b; }
 
 .prompt-section { background: #fff; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
 .prompt-header { padding: 16px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; cursor: pointer; display: flex; align-items: center; gap: 12px; user-select: none; }
@@ -43,7 +53,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .model-stats { font-size: 12px; color: #64748b; margin-left: auto; display: flex; gap: 12px; }
 .model-error { padding: 10px 14px; font-size: 13px; color: #dc2626; background: #fef2f2; }
 
-.model-output { max-height: 300px; overflow-y: auto; padding: 12px 14px; font-size: 13px; line-height: 1.6; background: #1e1e2e; color: #cdd6f4; font-family: 'SF Mono', 'Fira Code', monospace; white-space: pre-wrap; word-break: break-word; }
+.model-output { max-height: 300px; overflow-y: auto; padding: 12px 14px; font-size: 13px; line-height: 1.6; background: #f8fafc; color: #334155; font-family: 'SF Mono', 'Fira Code', monospace; white-space: pre-wrap; word-break: break-word; border: 1px solid #e2e8f0; border-radius: 6px; }
 
 .model-score { padding: 12px 14px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; border-top: 1px solid #e2e8f0; }
 .score-group { display: flex; align-items: center; gap: 6px; }
@@ -70,33 +80,46 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .save-bar button:hover { background: #4338ca; transform: translateY(-1px); }
 .save-bar button.saved { background: #16a34a; box-shadow: 0 4px 16px rgba(22,163,74,0.4); }
 
-.skipped-note { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 12px 18px; margin-top: 20px; font-size: 13px; color: #92400e; }
-.skipped-note strong { color: #78350f; }
+.skipped-note { background: #f0f9ff; border: 1px solid #7dd3fc; border-radius: 10px; padding: 12px 18px; margin-top: 20px; font-size: 13px; color: #0c4a6e; }
+.skipped-note strong { color: #0369a1; }
 
 @media (max-width: 600px) {
   .models-grid { grid-template-columns: 1fr; }
-  .header { padding: 10px 14px; }
-  .header h1 { font-size: 16px; }
+  .sidebar { width: 60px; }
+  .sidebar-brand { font-size: 0; padding: 16px 10px; }
+  .sidebar-nav a { padding: 12px 14px; font-size: 0; justify-content: center; }
+  .main { margin-left: 60px; padding: 12px; }
+  .toolbar { padding: 10px 0; }
 }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <h1>📊 LLM Benchmark 评分</h1>
-  <select id="fileSelect" onchange="loadFile(this.value)">
-    <option value="">-- 选择结果文件 --</option>
-  </select>
-  <button onclick="saveAll()" id="saveBtn">💾 保存评分</button>
-  <span class="status" id="saveStatus"></span>
+<div class="sidebar">
+  <div class="sidebar-brand">模型评测系统</div>
+  <nav class="sidebar-nav">
+    <a href="/score.html" class="active">评分</a>
+    <a href="/summary.html">汇总</a>
+    <a href="/models.html">模型管理</a>
+    <a href="/billing.html">计费设置</a>
+  </nav>
 </div>
 
-<div class="container" id="content">
-  <div class="empty">
-    <h2>选择一个结果文件开始评分</h2>
-    <p>选择上方下拉菜单中的 JSON 文件</p>
+<div class="main">
+  <div class="toolbar">
+    <select id="fileSelect" onchange="loadFile(this.value)">
+      <option value="">-- 选择结果文件 --</option>
+    </select>
+    <button onclick="saveAll()" id="saveBtn">保存评分</button>
+    <span class="status" id="saveStatus"></span>
   </div>
-</div>
+
+  <div id="content">
+    <div class="empty">
+      <h2>选择一个结果文件开始评分</h2>
+      <p>选择上方下拉菜单中的 JSON 文件</p>
+    </div>
+  </div>
 
 <div class="save-bar">
   <button onclick="saveAll()" id="saveBtnBottom">💾 保存评分</button>
@@ -106,10 +129,25 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 const API = '';
 let currentFile = null;
 let allData = [];
+window._promptsMap = {};
+let billingCfg = { display_currency: 'USD', exchange_rate: 7.25, exclude_token_plan: false };
 
-// 页面加载 → 获取文件列表
+function fmtCost(usd) {
+  if (billingCfg.display_currency === 'RMB') {
+    return '\u00a5' + (usd * billingCfg.exchange_rate).toFixed(4);
+  }
+  return '$' + usd.toFixed(5);
+}
+
+// 页面加载 → 获取文件列表 + prompts
 (async function init() {
-  const files = await fetch(API + '/api/files').then(r => r.json());
+  const [files, prompts, billing] = await Promise.all([
+    fetch(API + '/api/files').then(r => r.json()),
+    fetch(API + '/api/prompts').then(r => r.json()).catch(() => []),
+    fetch(API + '/api/billing-config').then(r => r.json()).catch(() => billingCfg),
+  ]);
+  billingCfg = billing || billingCfg;
+  prompts.forEach(p => { window._promptsMap[p.id] = p.prompt; });
   const sel = document.getElementById('fileSelect');
   files.forEach(f => {
     const opt = document.createElement('option');
@@ -183,7 +221,7 @@ function render() {
   if (window._skippedModels && window._skippedModels.length > 0) {
     const footer = document.createElement('div');
     footer.className = 'skipped-note';
-    footer.innerHTML = `<p>⚠️ 以下模型未参与测试（API Key 未配置或无效）：<strong>${window._skippedModels.join(', ')}</strong>。如需测试请编辑 .env 填写对应 Key 后重新运行。</p>`;
+    footer.innerHTML = `<p>⚠️ 以下模型未参与测试：<strong>${window._skippedModels.join(', ')}</strong></p>`;
     document.getElementById('content').appendChild(footer);
   }
 }
@@ -222,7 +260,7 @@ function renderModelCard(r, pid, idx) {
         <span>⏱ ${r.latency_s}s</span>
         <span>📥 ${r.tokens_input}t</span>
         <span>📤 ${r.tokens_output}t</span>
-        <span>💰 $${r.cost_usd.toFixed(5)}</span>
+        <span>💰 ${fmtCost(r.cost_usd)}</span>
       </span>
     </div>
     <div class="model-output">${escapeHtml(displayOutput)}</div>
@@ -340,7 +378,7 @@ function openCompare(pid) {
     <div class="cmp-panel">
       <div class="cmp-panel-header">
         <span class="cmp-model-name">🤖 ${r.model}</span>
-        <span class="cmp-stats">⏱${r.latency_s}s · 📥${r.tokens_input}t · 📤${r.tokens_output}t · $${r.cost_usd.toFixed(4)}</span>
+        <span class="cmp-stats">⏱${r.latency_s}s · 📥${r.tokens_input}t · 📤${r.tokens_output}t · ${fmtCost(r.cost_usd)}</span>
       </div>
       <div class="cmp-output">${panelBody}</div>
       <div class="cmp-score-row">
@@ -375,14 +413,14 @@ function openCompare(pid) {
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; }
-.cmp-topbar { background: #1a1a2e; color: #fff; padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; position: sticky; top: 0; z-index: 100; }
+.cmp-topbar { background: #fff; color: #1e293b; padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 .cmp-topbar .title { font-size: 16px; font-weight: 600; }
-.cmp-topbar .meta { font-size: 13px; color: #94a3b8; }
-.cmp-topbar .prompt-snip { font-size: 12px; color: #94a3b8; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-topbar .meta { font-size: 13px; color: #64748b; }
+.cmp-topbar .prompt-snip { font-size: 12px; color: #64748b; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmp-topbar button { margin-left: auto; padding: 8px 20px; background: #4f46e5; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; }
 .cmp-topbar button:hover { background: #4338ca; }
 .cmp-topbar button.saved { background: #16a34a; }
-.cmp-topbar .status { font-size: 13px; color: #94a3b8; }
+.cmp-topbar .status { font-size: 13px; color: #64748b; }
 .cmp-container { padding: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 14px; }
 .cmp-panel { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; display: flex; flex-direction: column; }
 .cmp-panel-header { padding: 10px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -394,7 +432,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cmp-output .md-body h2 { font-size: 1.25em; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin: 14px 0 6px; }
 .cmp-output .md-body h3 { font-size: 1.1em; margin: 12px 0 4px; }
 .cmp-output .md-body code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: 'SF Mono','Fira Code',monospace; }
-.cmp-output .md-body pre { background: #1e1e2e; color: #cdd6f4; padding: 14px 18px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+.cmp-output .md-body pre { background: #f1f5f9; color: #334155; padding: 14px 18px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
 .cmp-output .md-body pre code { background: none; padding: 0; color: inherit; }
 .cmp-output .md-body table { border-collapse: collapse; width: 100%; margin: 10px 0; }
 .cmp-output .md-body th, .cmp-output .md-body td { border: 1px solid #e2e8f0; padding: 6px 12px; text-align: left; }
@@ -404,7 +442,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cmp-output .md-body blockquote { border-left: 4px solid #4f46e5; padding: 4px 14px; color: #475569; background: #f8fafc; margin: 10px 0; border-radius: 0 6px 6px 0; }
 .cmp-output .md-body a { color: #4f46e5; }
 .cmp-output .md-body hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
-.cmp-output .md-body .think { background: #fffbeb; border-left: 3px solid #f59e0b; padding: 6px 12px; margin: 8px 0; border-radius: 0 6px 6px 0; font-size: 0.9em; color: #92400e; }
+.cmp-output .md-body .think { background: #f0f9ff; border-left: 3px solid #7dd3fc; padding: 6px 12px; margin: 8px 0; border-radius: 0 6px 6px 0; font-size: 0.9em; color: #0c4a6e; }
 .cmp-output .html-frame { width: 100%; height: 65vh; border: none; }
 .cmp-score-row { padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-top: 1px solid #e2e8f0; }
 .cmp-score-row .score-group { display: flex; align-items: center; gap: 4px; }
@@ -526,7 +564,7 @@ function previewOutput(pid, idx) {
   h2 { font-size: 1.4em; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-top: 20px; }
   h3 { font-size: 1.15em; margin-top: 16px; }
   code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: 'SF Mono', 'Fira Code', monospace; }
-  pre { background: #1e1e2e; color: #cdd6f4; padding: 16px 20px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+  pre { background: #f1f5f9; color: #334155; padding: 16px 20px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
   pre code { background: none; padding: 0; color: inherit; }
   table { border-collapse: collapse; width: 100%; margin: 12px 0; }
   th, td { border: 1px solid #e2e8f0; padding: 8px 14px; text-align: left; }
@@ -536,7 +574,7 @@ function previewOutput(pid, idx) {
   blockquote { border-left: 4px solid #4f46e5; padding: 4px 16px; color: #475569; background: #f8fafc; margin: 12px 0; border-radius: 0 8px 8px 0; }
   a { color: #4f46e5; }
   hr { border: none; border-top: 1px solid #e2e8f0; margin: 20px 0; }
-  .think { background: #fffbeb; border-left: 3px solid #f59e0b; padding: 8px 14px; margin: 8px 0; border-radius: 0 8px 8px 0; font-size: 0.9em; color: #92400e; }
+  .think { background: #f0f9ff; border-left: 3px solid #7dd3fc; padding: 8px 14px; margin: 8px 0; border-radius: 0 8px 8px 0; font-size: 0.9em; color: #0c4a6e; }
 </style>
 </head>
 <body>${mdHtml}</body>
@@ -621,13 +659,7 @@ function renderMarkdown(md) {
 }
 
 function getPromptText(pid) {
-  // 从 allData 中找对应 prompt 的原始描述，或者用预设映射
-  const map = {
-    'frontend_001': '设置页中，api部分，放到页面最下面。默认隐藏。有一个按钮点击之后，可以展开。',
-    'tool_001': '我想在对话中同时使用 MiniMax 2.7 和 2.5，如何实现这个功能？请帮我规划方案并给出代码实现。',
-    'web_tool_001': '我们现在规划下，给模型设定角色的这个功能。我想通过给模型预设一些职业或着岗位，让他们基于岗位这些角度去回答对应问题。',
-  };
-  return map[pid] || '';
+  return window._promptsMap[pid] || '';
 }
 </script>
 

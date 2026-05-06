@@ -3,15 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LLM Benchmark 汇总</title>
+<title>汇总 - 模型评测系统</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; }
-.nav { background: #1a1a2e; padding: 12px 24px; display: flex; align-items: center; gap: 20px; position: sticky; top: 0; z-index: 100; }
-.nav h1 { font-size: 18px; color: #fff; font-weight: 600; }
-.nav a { color: #94a3b8; text-decoration: none; font-size: 14px; padding: 6px 14px; border-radius: 6px; transition: all 0.2s; }
-.nav a:hover, .nav a.active { color: #fff; background: #2d2d44; }
-.container { max-width: 1300px; margin: 0 auto; padding: 24px; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; display: flex; min-height: 100vh; }
+
+.sidebar { width: 220px; background: #fff; color: #475569; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 200; border-right: 1px solid #e2e8f0; }
+.sidebar-brand { padding: 20px 20px 16px; font-size: 16px; font-weight: 700; color: #1e293b; border-bottom: 1px solid #e2e8f0; letter-spacing: 0.5px; }
+.sidebar-nav { flex: 1; padding: 12px 0; }
+.sidebar-nav a { display: flex; align-items: center; gap: 10px; padding: 10px 20px; color: #64748b; text-decoration: none; font-size: 14px; transition: all 0.15s; border-left: 3px solid transparent; }
+.sidebar-nav a:hover { color: #1e293b; background: #f1f5f9; }
+.sidebar-nav a.active { color: #4f46e5; background: #eef2ff; border-left-color: #4f46e5; }
+
+.main { margin-left: 220px; flex: 1; padding: 24px 32px; min-height: 100vh; }
 
 .section { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 .section h2 { font-size: 17px; margin-bottom: 16px; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
@@ -50,24 +54,48 @@ tr:hover td { background: #f8fafc; }
 .u3 { background: #fef3c7; color: #d97706; }
 .u4 { background: #fee2e2; color: #dc2626; }
 
-.skipped-note { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 12px 18px; margin-top: 20px; font-size: 13px; color: #92400e; }
-.skipped-note strong { color: #78350f; }
+.tp-badge { display: inline-block; background: #fef3c7; color: #92400e; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+.tp-excluded { text-decoration: line-through; opacity: 0.5; }
+.tp-note { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 16px; margin-bottom: 20px; font-size: 13px; color: #92400e; }
+
+.skipped-note { background: #f0f9ff; border: 1px solid #7dd3fc; border-radius: 10px; padding: 12px 18px; margin-top: 20px; font-size: 13px; color: #0c4a6e; }
+.skipped-note strong { color: #0369a1; }
+
+@media (max-width: 700px) {
+  .sidebar { width: 60px; }
+  .sidebar-brand { font-size: 0; padding: 16px 10px; }
+  .sidebar-nav a { padding: 12px 14px; font-size: 0; justify-content: center; }
+  .main { margin-left: 60px; padding: 16px; }
+}
 </style>
 </head>
 <body>
 
-<div class="nav">
-  <h1>LLM Benchmark</h1>
-  <a href="/score.html">评分页</a>
-  <a href="/summary.html" class="active">汇总</a>
+<div class="sidebar">
+  <div class="sidebar-brand">模型评测系统</div>
+  <nav class="sidebar-nav">
+    <a href="/score.html">评分</a>
+    <a href="/summary.html" class="active">汇总</a>
+    <a href="/models.html">模型管理</a>
+    <a href="/billing.html">计费设置</a>
+  </nav>
 </div>
 
-<div class="container" id="content">
-  <div class="loading">加载汇总数据...</div>
+<div class="main">
+  <div id="content">
+    <div class="loading">加载汇总数据...</div>
+  </div>
 </div>
 
 <script>
 const API = '';
+
+function fmtCost(usd, billing) {
+  if (billing.display_currency === 'RMB') {
+    return '\u00a5' + (usd * billing.exchange_rate).toFixed(4);
+  }
+  return '$' + usd.toFixed(5);
+}
 
 (async function init() {
   const resp = await fetch(API + '/api/summary');
@@ -82,23 +110,30 @@ const API = '';
 })();
 
 function render(data) {
-  const { models, scene_matrix } = data;
+  const { models, scene_matrix, billing } = data;
+  const excludeTP = billing.exclude_token_plan;
 
   // Stats row
   const totalRuns = models.reduce((s, m) => s + m.total_runs, 0);
   const totalSuccess = models.reduce((s, m) => s + m.success, 0);
   const totalScored = models.reduce((s, m) => s + m.scored, 0);
   const totalTokens = models.reduce((s, m) => s + m.total_tokens, 0);
-  const totalCost = models.reduce((s, m) => s + m.total_cost, 0);
+  const costModels = excludeTP ? models.filter(m => !m.is_token_plan) : models;
+  const totalCost = costModels.reduce((s, m) => s + m.total_cost, 0);
 
-  let html = `
+  let html = '';
+  if (excludeTP) {
+    html += '<div class="tp-note">Token Plan 模型已从费用统计中排除（MiniMax 系列不参与费用汇总）</div>';
+  }
+
+  html += `
   <div class="stats-row">
     <div class="stat-card"><div class="value">${data.total_files}</div><div class="label">测试批次</div></div>
     <div class="stat-card"><div class="value">${totalRuns}</div><div class="label">总执行次数</div></div>
     <div class="stat-card"><div class="value">${totalSuccess}/${totalRuns}</div><div class="label">成功/总数</div></div>
     <div class="stat-card"><div class="value">${totalScored}</div><div class="label">已评分</div></div>
     <div class="stat-card"><div class="value">${formatTokens(totalTokens)}</div><div class="label">总 Token</div></div>
-    <div class="stat-card"><div class="value">$${totalCost.toFixed(4)}</div><div class="label">总费用</div></div>
+    <div class="stat-card"><div class="value">${fmtCost(totalCost, billing)}</div><div class="label">总费用${excludeTP ? ' (不含TP)' : ''}</div></div>
   </div>`;
 
   // Model overview table
@@ -120,9 +155,11 @@ function render(data) {
     const usabilityHtml = Object.entries(m.usability_dist).map(([k, v]) =>
       `<span class="usability-item u${['直接用','小改后用','大改后用','重写'].indexOf(k)+1}">${k}:${v}</span>`
     ).join('');
+    const tpLabel = m.is_token_plan ? '<span class="tp-badge">TP</span>' : '';
+    const costClass = (excludeTP && m.is_token_plan) ? ' cost-cell tp-excluded' : 'cost-cell';
 
     html += `<tr>
-      <td><strong>${m.model}</strong></td>
+      <td><strong>${m.model}</strong>${tpLabel}</td>
       <td>${m.total_runs}</td>
       <td>${m.success}</td>
       <td>${m.scored}</td>
@@ -131,7 +168,7 @@ function render(data) {
       <td class="token-cell">${formatTokens(m.total_input_tokens)}</td>
       <td class="token-cell">${formatTokens(m.total_output_tokens)}</td>
       <td class="token-cell"><strong>${formatTokens(m.total_tokens)}</strong></td>
-      <td class="cost-cell">$${m.total_cost.toFixed(5)}</td>
+      <td class="${costClass}">${fmtCost(m.total_cost, billing)}</td>
       <td><div class="usability-bar">${usabilityHtml || '-'}</div></td>
     </tr>`;
   });
@@ -144,7 +181,7 @@ function render(data) {
 
   html += `
   <div class="section">
-    <h2>场景 × 模型 质量矩阵</h2>
+    <h2>场景 x 模型 质量矩阵</h2>
     <div style="overflow-x:auto;">
     <table class="matrix-table">
       <thead><tr>
@@ -183,24 +220,25 @@ function render(data) {
       <tbody>`;
 
   scene_matrix.forEach(r => {
+    const tpLabel = r.is_token_plan ? '<span class="tp-badge">TP</span>' : '';
+    const costClass = (excludeTP && r.is_token_plan) ? ' cost-cell tp-excluded' : 'cost-cell';
     html += `<tr>
-      <td><strong>${r.model}</strong></td>
+      <td><strong>${r.model}</strong>${tpLabel}</td>
       <td>${r.scene}</td>
       <td>${r.runs}</td>
       <td class="token-cell">${formatTokens(r.total_input_tokens)}</td>
       <td class="token-cell">${formatTokens(r.total_output_tokens)}</td>
       <td class="token-cell"><strong>${formatTokens(r.total_tokens)}</strong></td>
-      <td class="cost-cell">$${r.total_cost.toFixed(5)}</td>
+      <td class="${costClass}">${fmtCost(r.total_cost, billing)}</td>
       <td>${r.avg_latency !== null ? r.avg_latency.toFixed(1) + 's' : '-'}</td>
     </tr>`;
   });
 
   html += '</tbody></table></div>';
 
-  // 显示未测试的模型
   const skipped = data.skipped || [];
   if (skipped.length > 0) {
-    html += `<div class="skipped-note"><p>以下模型未参与测试（API Key 未配置或无效）：<strong>${skipped.join(', ')}</strong>。如需测试请编辑 .env 填写对应 Key 后重新运行。</p></div>`;
+    html += `<div class="skipped-note"><p>以下模型未参与测试：<strong>${skipped.join(', ')}</strong></p></div>`;
   }
 
   document.getElementById('content').innerHTML = html;

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>计费设置 - 模型评测系统</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; display: flex; min-height: 100vh; }
+
+/* 左侧边栏 */
+.sidebar { width: 220px; background: #fff; color: #475569; display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 200; border-right: 1px solid #e2e8f0; }
+.sidebar-brand { padding: 20px 20px 16px; font-size: 16px; font-weight: 700; color: #1e293b; border-bottom: 1px solid #e2e8f0; letter-spacing: 0.5px; }
+.sidebar-nav { flex: 1; padding: 12px 0; }
+.sidebar-nav a { display: flex; align-items: center; gap: 10px; padding: 10px 20px; color: #64748b; text-decoration: none; font-size: 14px; transition: all 0.15s; border-left: 3px solid transparent; }
+.sidebar-nav a:hover { color: #1e293b; background: #f1f5f9; }
+.sidebar-nav a.active { color: #4f46e5; background: #eef2ff; border-left-color: #4f46e5; }
+
+/* 主内容区 */
+.main { margin-left: 220px; flex: 1; padding: 24px 32px; min-height: 100vh; }
+.page-title { font-size: 20px; font-weight: 700; color: #1e293b; margin-bottom: 20px; }
+
+.section { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); max-width: 600px; }
+.section h3 { font-size: 15px; color: #1e293b; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; }
+
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 6px; }
+.form-group .hint { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+
+.radio-group { display: flex; gap: 12px; }
+.radio-option { flex: 1; }
+.radio-option input { display: none; }
+.radio-option label { display: block; text-align: center; padding: 10px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; background: #f8fafc; }
+.radio-option input:checked + label { border-color: #4f46e5; background: #eef2ff; color: #4f46e5; }
+
+input[type="number"] { width: 160px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; outline: none; transition: border 0.15s; }
+input[type="number"]:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+
+.conversion-example { background: #f8fafc; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #475569; margin-top: 8px; }
+.conversion-example span { font-weight: 600; color: #1e293b; }
+
+.checkbox-group { display: flex; align-items: flex-start; gap: 10px; }
+.checkbox-group input[type="checkbox"] { width: 18px; height: 18px; margin-top: 1px; accent-color: #4f46e5; cursor: pointer; }
+.checkbox-group .cb-text { font-size: 14px; color: #1e293b; line-height: 1.5; }
+.checkbox-group .cb-text small { display: block; color: #94a3b8; font-size: 12px; margin-top: 2px; }
+
+.btn-row { margin-top: 24px; display: flex; align-items: center; gap: 12px; }
+.btn-row button { padding: 10px 28px; background: #4f46e5; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.btn-row button:hover { background: #4338ca; }
+.btn-row button.saved { background: #16a34a; }
+.btn-row .status { font-size: 13px; color: #64748b; }
+
+@media (max-width: 700px) {
+  .sidebar { width: 60px; }
+  .sidebar-brand { font-size: 0; padding: 16px 10px; }
+  .sidebar-nav a { padding: 12px 14px; font-size: 0; justify-content: center; }
+  .main { margin-left: 60px; padding: 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-brand">模型评测系统</div>
+  <nav class="sidebar-nav">
+    <a href="/score.html">评分</a>
+    <a href="/summary.html">汇总</a>
+    <a href="/models.html">模型管理</a>
+    <a href="/billing.html" class="active">计费设置</a>
+  </nav>
+</div>
+
+<div class="main">
+  <h2 class="page-title">计费设置</h2>
+
+  <div class="section">
+    <h3>币种 &amp; 汇率</h3>
+    <div class="form-group">
+      <label>显示币种</label>
+      <div class="radio-group">
+        <div class="radio-option">
+          <input type="radio" name="currency" id="cur_usd" value="USD" onchange="markDirty()">
+          <label for="cur_usd">USD ($)</label>
+        </div>
+        <div class="radio-option">
+          <input type="radio" name="currency" id="cur_rmb" value="RMB" onchange="markDirty()">
+          <label for="cur_rmb">RMB (¥)</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="rateInput">汇率 (1 USD = ? RMB)</label>
+      <input type="number" id="rateInput" step="0.01" min="0.01" onchange="updateExample();markDirty()">
+      <div class="hint">修改后所有费用按此汇率换算</div>
+    </div>
+
+    <div class="conversion-example">
+      1 USD = <span id="rateDisplay">7.25</span> RMB | 
+      100 USD = <span id="exampleRmb">725.00</span> RMB
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>计费范围</h3>
+    <div class="checkbox-group">
+      <input type="checkbox" id="excludeTp" onchange="markDirty()">
+      <div class="cb-text">
+        排除 Token Plan 模型
+        <small>勾选后，MiniMax 系列的费用不计入汇总页总费用统计</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button onclick="saveConfig()" id="saveBtn">保存配置</button>
+    <span class="status" id="saveStatus"></span>
+  </div>
+</div>
+
+<script>
+const API = '';
+let dirty = false;
+
+(async function init() {
+  const cfg = await fetch(API + '/api/billing-config').then(r => r.json());
+  document.getElementById('cur_usd').checked = cfg.display_currency === 'USD';
+  document.getElementById('cur_rmb').checked = cfg.display_currency === 'RMB';
+  document.getElementById('rateInput').value = cfg.exchange_rate;
+  document.getElementById('excludeTp').checked = cfg.exclude_token_plan;
+  updateExample();
+})();
+
+function updateExample() {
+  const rate = parseFloat(document.getElementById('rateInput').value) || 0;
+  document.getElementById('rateDisplay').textContent = rate.toFixed(2);
+  document.getElementById('exampleRmb').textContent = (100 * rate).toFixed(2);
+}
+
+function markDirty() {
+  dirty = true;
+  document.getElementById('saveBtn').classList.remove('saved');
+  document.getElementById('saveStatus').textContent = '';
+}
+
+async function saveConfig() {
+  const currency = document.querySelector('input[name="currency"]:checked').value;
+  const rate = parseFloat(document.getElementById('rateInput').value);
+  const exclude = document.getElementById('excludeTp').checked;
+
+  if (!rate || rate <= 0) {
+    alert('请输入有效汇率');
+    return;
+  }
+
+  const resp = await fetch(API + '/api/billing-config', {
+    method: 'POST',
+    body: JSON.stringify({
+      display_currency: currency,
+      exchange_rate: rate,
+      exclude_token_plan: exclude,
+    }),
+  });
+  const result = await resp.json();
+
+  if (result.ok) {
+    dirty = false;
+    document.getElementById('saveBtn').classList.add('saved');
+    document.getElementById('saveStatus').textContent = '已保存 ' + new Date().toLocaleTimeString();
+  } else {
+    alert('保存失败: ' + (result.error || '未知错误'));
+  }
+}
+</script>
+
+</body>
+</html>

@@ -22,12 +22,34 @@ USABILITY_OPTIONS = {
 }
 
 
+def _load_records(file_path: Path):
+    """加载结果文件，统一返回 (records, skipped) 元组"""
+    data = json.loads(file_path.read_text(encoding="utf-8"))
+    if isinstance(data, dict) and "records" in data:
+        return data["records"], data.get("skipped", [])
+    elif isinstance(data, list):
+        return data, []
+    else:
+        return [], []
+
+
+def _save_records(file_path: Path, records: list, skipped: list):
+    """保存结果，保持与原始格式一致"""
+    if skipped:
+        file_path.write_text(
+            json.dumps({"records": records, "skipped": skipped}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    else:
+        file_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 # ── 评分模式 ──────────────────────────────────────────
 def score_results(file_path: Path):
-    data = json.loads(file_path.read_text(encoding="utf-8"))
+    records, skipped = _load_records(file_path)
     # 按 prompt 分组
     prompts = {}
-    for r in data:
+    for r in records:
         pid = r["prompt_id"]
         if pid not in prompts:
             prompts[pid] = []
@@ -67,13 +89,13 @@ def score_results(file_path: Path):
             r["usability"] = USABILITY_OPTIONS[usability]
             r["notes"] = notes if notes else None
 
-    file_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _save_records(file_path, records, skipped)
     print(f"\n✓ 评分已保存到 {file_path}")
 
 
 # ── 单次报告 ──────────────────────────────────────────
 def show_report(file_path: Path):
-    data = json.loads(file_path.read_text(encoding="utf-8"))
+    records, skipped = _load_records(file_path)
 
     print(f"\n{'='*60}")
     print(f"测试报告: {file_path.name}")
@@ -81,7 +103,7 @@ def show_report(file_path: Path):
 
     # 按模型汇总
     by_model = {}
-    for r in data:
+    for r in records:
         m = r["model"]
         if m not in by_model:
             by_model[m] = {"records": [], "total_cost": 0, "total_latency": []}
@@ -107,7 +129,7 @@ def show_report(file_path: Path):
     # 按场景明细
     print(f"\n\n── 场景明细 ──")
     by_scene = {}
-    for r in data:
+    for r in records:
         s = r["scene"]
         if s not in by_scene:
             by_scene[s] = []
@@ -135,7 +157,8 @@ def compare_all():
 
     all_records = []
     for f in files:
-        all_records.extend(json.loads(f.read_text(encoding="utf-8")))
+        records, _ = _load_records(f)
+        all_records.extend(records)
 
     print(f"\n汇总 {len(files)} 次测试，共 {len(all_records)} 条记录\n")
 
