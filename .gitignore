@@ -1,0 +1,10 @@
+# Test data
+results/
+
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo

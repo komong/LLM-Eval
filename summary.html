@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Benchmark 汇总</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+.nav { background: #1a1a2e; padding: 12px 24px; display: flex; align-items: center; gap: 20px; position: sticky; top: 0; z-index: 100; }
+.nav h1 { font-size: 18px; color: #fff; font-weight: 600; }
+.nav a { color: #94a3b8; text-decoration: none; font-size: 14px; padding: 6px 14px; border-radius: 6px; transition: all 0.2s; }
+.nav a:hover, .nav a.active { color: #fff; background: #2d2d44; }
+.container { max-width: 1300px; margin: 0 auto; padding: 24px; }
+
+.section { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.section h2 { font-size: 17px; margin-bottom: 16px; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #f1f5f9; }
+th { background: #f8fafc; font-weight: 600; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+tr:hover td { background: #f8fafc; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+.badge-green { background: #dcfce7; color: #16a34a; }
+.badge-yellow { background: #fef3c7; color: #d97706; }
+.badge-red { background: #fee2e2; color: #dc2626; }
+.badge-gray { background: #f1f5f9; color: #64748b; }
+
+.score-cell { font-weight: 600; text-align: center; }
+.score-na { color: #94a3b8; text-align: center; }
+.cost-cell { text-align: right; font-family: monospace; }
+.token-cell { text-align: right; font-family: monospace; }
+
+.matrix-table th:first-child, .matrix-table td:first-child { position: sticky; left: 0; background: #fff; z-index: 1; }
+.matrix-table tr:hover td:first-child { background: #f8fafc; }
+.matrix-table th:first-child { background: #f8fafc; z-index: 2; }
+
+.loading { text-align: center; padding: 60px; color: #94a3b8; font-size: 15px; }
+.empty { text-align: center; padding: 60px; color: #94a3b8; }
+.stats-row { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.stat-card { flex: 1; min-width: 160px; background: #f8fafc; border-radius: 10px; padding: 16px 20px; border: 1px solid #e2e8f0; }
+.stat-card .value { font-size: 28px; font-weight: 700; color: #1e293b; }
+.stat-card .label { font-size: 12px; color: #64748b; margin-top: 4px; }
+
+.usability-bar { display: flex; gap: 4px; align-items: center; font-size: 12px; }
+.usability-item { padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.u1 { background: #dcfce7; color: #16a34a; }
+.u2 { background: #dbeafe; color: #2563eb; }
+.u3 { background: #fef3c7; color: #d97706; }
+.u4 { background: #fee2e2; color: #dc2626; }
+
+.skipped-note { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 12px 18px; margin-top: 20px; font-size: 13px; color: #92400e; }
+.skipped-note strong { color: #78350f; }
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <h1>LLM Benchmark</h1>
+  <a href="/score.html">评分页</a>
+  <a href="/summary.html" class="active">汇总</a>
+</div>
+
+<div class="container" id="content">
+  <div class="loading">加载汇总数据...</div>
+</div>
+
+<script>
+const API = '';
+
+(async function init() {
+  const resp = await fetch(API + '/api/summary');
+  const data = await resp.json();
+
+  if (!data.models || data.models.length === 0) {
+    document.getElementById('content').innerHTML = '<div class="empty"><h2>暂无数据</h2><p>请先运行 runner.py 生成测试结果</p></div>';
+    return;
+  }
+
+  render(data);
+})();
+
+function render(data) {
+  const { models, scene_matrix } = data;
+
+  // Stats row
+  const totalRuns = models.reduce((s, m) => s + m.total_runs, 0);
+  const totalSuccess = models.reduce((s, m) => s + m.success, 0);
+  const totalScored = models.reduce((s, m) => s + m.scored, 0);
+  const totalTokens = models.reduce((s, m) => s + m.total_tokens, 0);
+  const totalCost = models.reduce((s, m) => s + m.total_cost, 0);
+
+  let html = `
+  <div class="stats-row">
+    <div class="stat-card"><div class="value">${data.total_files}</div><div class="label">测试批次</div></div>
+    <div class="stat-card"><div class="value">${totalRuns}</div><div class="label">总执行次数</div></div>
+    <div class="stat-card"><div class="value">${totalSuccess}/${totalRuns}</div><div class="label">成功/总数</div></div>
+    <div class="stat-card"><div class="value">${totalScored}</div><div class="label">已评分</div></div>
+    <div class="stat-card"><div class="value">${formatTokens(totalTokens)}</div><div class="label">总 Token</div></div>
+    <div class="stat-card"><div class="value">$${totalCost.toFixed(4)}</div><div class="label">总费用</div></div>
+  </div>`;
+
+  // Model overview table
+  html += `
+  <div class="section">
+    <h2>模型总览</h2>
+    <table>
+      <thead><tr>
+        <th>模型</th><th>执行次数</th><th>成功</th><th>已评分</th><th>平均质量</th>
+        <th>平均耗时</th><th>Input Token</th><th>Output Token</th><th>总 Token</th>
+        <th>总费用</th><th>可用度分布</th>
+      </tr></thead>
+      <tbody>`;
+
+  models.forEach(m => {
+    const quality = m.avg_quality !== null ? m.avg_quality.toFixed(1) : '-';
+    const latency = m.avg_latency !== null ? m.avg_latency.toFixed(1) + 's' : '-';
+    const qualityClass = m.avg_quality !== null ? (m.avg_quality >= 4 ? 'badge-green' : m.avg_quality >= 3 ? 'badge-yellow' : 'badge-red') : '';
+    const usabilityHtml = Object.entries(m.usability_dist).map(([k, v]) =>
+      `<span class="usability-item u${['直接用','小改后用','大改后用','重写'].indexOf(k)+1}">${k}:${v}</span>`
+    ).join('');
+
+    html += `<tr>
+      <td><strong>${m.model}</strong></td>
+      <td>${m.total_runs}</td>
+      <td>${m.success}</td>
+      <td>${m.scored}</td>
+      <td class="score-cell"><span class="badge ${qualityClass}">${quality}</span></td>
+      <td>${latency}</td>
+      <td class="token-cell">${formatTokens(m.total_input_tokens)}</td>
+      <td class="token-cell">${formatTokens(m.total_output_tokens)}</td>
+      <td class="token-cell"><strong>${formatTokens(m.total_tokens)}</strong></td>
+      <td class="cost-cell">$${m.total_cost.toFixed(5)}</td>
+      <td><div class="usability-bar">${usabilityHtml || '-'}</div></td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+
+  // Scene × Model matrix
+  const scenes = [...new Set(scene_matrix.map(r => r.scene))].sort();
+  const modelNames = [...new Set(scene_matrix.map(r => r.model))].sort();
+
+  html += `
+  <div class="section">
+    <h2>场景 × 模型 质量矩阵</h2>
+    <div style="overflow-x:auto;">
+    <table class="matrix-table">
+      <thead><tr>
+        <th>场景</th>
+        ${modelNames.map(m => `<th>${m}</th>`).join('')}
+      </tr></thead>
+      <tbody>`;
+
+  scenes.forEach(scene => {
+    html += `<tr><td><strong>${scene}</strong></td>`;
+    modelNames.forEach(model => {
+      const match = scene_matrix.find(r => r.model === model && r.scene === scene);
+      if (match && match.avg_quality !== null) {
+        const cls = match.avg_quality >= 4 ? 'badge-green' : match.avg_quality >= 3 ? 'badge-yellow' : 'badge-red';
+        html += `<td class="score-cell"><span class="badge ${cls}">${match.avg_quality.toFixed(1)}</span></td>`;
+      } else if (match && match.avg_quality === null) {
+        html += `<td class="score-na">未评</td>`;
+      } else {
+        html += `<td class="score-na">-</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div></div>';
+
+  // Token consumption table
+  html += `
+  <div class="section">
+    <h2>Token 消耗明细</h2>
+    <table>
+      <thead><tr>
+        <th>模型</th><th>场景</th><th>测试次数</th><th>Input Token</th><th>Output Token</th>
+        <th>总 Token</th><th>总费用</th><th>平均耗时</th>
+      </tr></thead>
+      <tbody>`;
+
+  scene_matrix.forEach(r => {
+    html += `<tr>
+      <td><strong>${r.model}</strong></td>
+      <td>${r.scene}</td>
+      <td>${r.runs}</td>
+      <td class="token-cell">${formatTokens(r.total_input_tokens)}</td>
+      <td class="token-cell">${formatTokens(r.total_output_tokens)}</td>
+      <td class="token-cell"><strong>${formatTokens(r.total_tokens)}</strong></td>
+      <td class="cost-cell">$${r.total_cost.toFixed(5)}</td>
+      <td>${r.avg_latency !== null ? r.avg_latency.toFixed(1) + 's' : '-'}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+
+  // 显示未测试的模型
+  const skipped = data.skipped || [];
+  if (skipped.length > 0) {
+    html += `<div class="skipped-note"><p>以下模型未参与测试（API Key 未配置或无效）：<strong>${skipped.join(', ')}</strong>。如需测试请编辑 .env 填写对应 Key 后重新运行。</p></div>`;
+  }
+
+  document.getElementById('content').innerHTML = html;
+}
+
+function formatTokens(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  return String(n);
+}
+</script>
+
+</body>
+</html>
