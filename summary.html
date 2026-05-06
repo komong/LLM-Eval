@@ -36,8 +36,8 @@ tr:hover td { background: #f8fafc; }
 
 .score-cell { font-weight: 600; text-align: center; }
 .score-na { color: #94a3b8; text-align: center; }
-.cost-cell { text-align: right; font-family: monospace; }
-.token-cell { text-align: right; font-family: monospace; }
+.cost-cell { text-align: center; font-family: monospace; }
+.token-cell { text-align: center; font-family: monospace; }
 .score-cell { text-align: center; }
 
 .matrix-table th:first-child, .matrix-table td:first-child { position: sticky; left: 0; background: #fff; z-index: 1; }
@@ -47,7 +47,7 @@ tr:hover td { background: #f8fafc; }
 .loading { text-align: center; padding: 60px; color: #94a3b8; font-size: 15px; }
 .empty { text-align: center; padding: 60px; color: #94a3b8; }
 .stats-row { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
-.stat-card { flex: 1; min-width: 160px; background: #f8fafc; border-radius: 10px; padding: 16px 20px; border: 1px solid #e2e8f0; }
+.stat-card { flex: 1; min-width: 160px; background: #f8fafc; border-radius: 10px; padding: 16px 20px; border: 1px solid #e2e8f0; text-align: center; }
 .stat-card .value { font-size: 28px; font-weight: 700; color: #1e293b; }
 .stat-card .label { font-size: 12px; color: #64748b; margin-top: 4px; }
 
@@ -93,8 +93,10 @@ tr:hover td { background: #f8fafc; }
 
 <script>
 const API = '';
+let displayNames = {};
 
 function modelShortName(name) {
+  if (displayNames[name]) return displayNames[name];
   const map = {
     'deepseek-v4-flash': 'DS V4 Flash',
     'deepseek-v4-flash-think': 'DS V4 Flash Think',
@@ -123,6 +125,8 @@ function fmtCost(usd, billing) {
   }
 
   render(data);
+  // 加载 display_name 映射
+  displayNames = data.display_names || {};
 })();
 
 function render(data) {

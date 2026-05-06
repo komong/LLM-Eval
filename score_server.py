@@ -171,6 +171,7 @@ class ScoreHandler(SimpleHTTPRequestHandler):
                         "enabled": val.get("enabled", True),
                         "show_in_summary": val.get("show_in_summary", True),
                         "show_in_score": val.get("show_in_score", True),
+                        "display_name": val.get("display_name", ""),
                     }
                 else:
                     normalized[name] = {"enabled": True, "show_in_summary": True, "show_in_score": True}
@@ -264,6 +265,7 @@ class ScoreHandler(SimpleHTTPRequestHandler):
                 continue
             success = [r for r in records if not r.get("error")]
             scored = [r for r in success if r.get("quality_score")]
+            usability_scored = [r for r in success if r.get("usability_score")]
             latencies = [r["latency_s"] for r in success if r.get("latency_s")]
             total_input = sum(r.get("tokens_input", 0) for r in success)
             total_output = sum(r.get("tokens_output", 0) for r in success)
@@ -280,6 +282,7 @@ class ScoreHandler(SimpleHTTPRequestHandler):
                 "success": len(success),
                 "scored": len(scored),
                 "avg_quality": round(sum(r["quality_score"] for r in scored) / len(scored), 1) if scored else None,
+                "avg_usability": round(sum(r["usability_score"] for r in usability_scored) / len(usability_scored), 1) if usability_scored else None,
                 "avg_latency": round(sum(latencies) / len(latencies), 1) if latencies else None,
                 "total_input_tokens": total_input,
                 "total_output_tokens": total_output,
@@ -300,6 +303,8 @@ class ScoreHandler(SimpleHTTPRequestHandler):
         scene_matrix = []
         for key, records in sorted(by_model_scene.items()):
             model, scene = key.split("|", 1)
+            if model in hidden_models:
+                continue
             success = [r for r in records if not r.get("error")]
             scored = [r for r in success if r.get("quality_score")]
             latencies = [r["latency_s"] for r in success if r.get("latency_s")]
@@ -329,6 +334,7 @@ class ScoreHandler(SimpleHTTPRequestHandler):
             "skipped": sorted(all_skipped),
             "all_models": ALL_MODELS,
             "billing": billing,
+            "display_names": {name: cfg.get("display_name", name) for name, cfg in models_config.items()},
         }
 
     def _load_file(self, filename):

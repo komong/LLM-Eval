@@ -55,7 +55,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 .model-output { max-height: 300px; overflow-y: auto; padding: 12px 14px; font-size: 13px; line-height: 1.6; background: #f8fafc; color: #334155; font-family: 'SF Mono', 'Fira Code', monospace; white-space: pre-wrap; word-break: break-word; border: 1px solid #e2e8f0; border-radius: 6px; }
 
-.model-score { padding: 12px 14px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; border-top: 1px solid #e2e8f0; }
+.model-score { padding: 12px 14px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; border-top: 1px solid #e2e8f0; resize: both; overflow: auto; min-height: 70px; }
 .score-group { display: flex; align-items: center; gap: 6px; }
 .score-group label { font-size: 13px; font-weight: 500; color: #334155; white-space: nowrap; }
 .score-stars { display: flex; gap: 2px; }
@@ -68,8 +68,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 /* 反向排列让星星从右到左高亮 */  
 .score-stars { flex-direction: row-reverse; }
 
-.usability-select { padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; }
-.notes-input { flex: 1; min-width: 160px; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; resize: vertical; min-height: 32px; font-family: inherit; }
+.notes-input { flex: 1; min-width: 160px; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; resize: vertical; min-height: 48px; font-family: inherit; }
 
 .empty { text-align: center; padding: 80px 20px; color: #94a3b8; }
 .empty h2 { font-size: 20px; margin-bottom: 8px; }
@@ -131,6 +130,8 @@ let currentFile = null;
 let allData = [];
 window._promptsMap = {};
 let billingCfg = { display_currency: 'USD', exchange_rate: 7.25, exclude_token_plan: false };
+let modelDisplayNames = {};
+let hiddenScoreModels = new Set();
 
 function fmtCost(usd) {
   if (billingCfg.display_currency === 'RMB') {
@@ -141,13 +142,19 @@ function fmtCost(usd) {
 
 // 页面加载 → 获取文件列表 + prompts
 (async function init() {
-  const [files, prompts, billing] = await Promise.all([
+  const [files, prompts, billing, modelsCfg] = await Promise.all([
     fetch(API + '/api/files').then(r => r.json()),
     fetch(API + '/api/prompts').then(r => r.json()).catch(() => []),
     fetch(API + '/api/billing-config').then(r => r.json()).catch(() => billingCfg),
+    fetch(API + '/api/models').then(r => r.json()).catch(() => ({})),
   ]);
   billingCfg = billing || billingCfg;
   prompts.forEach(p => { window._promptsMap[p.id] = p.prompt; });
+  // 构建 display_name 映射
+  for (const [key, cfg] of Object.entries(modelsCfg)) {
+    modelDisplayNames[key] = cfg.display_name || key;
+    if (!cfg.show_in_score) hiddenScoreModels.add(key);
+  }
   const sel = document.getElementById('fileSelect');
   files.forEach(f => {
     const opt = document.createElement('option');
@@ -184,9 +191,12 @@ async function loadFile(filename) {
 }
 
 function render() {
+  // 过滤：排除 show_in_score=false 的模型
+  const visibleData = allData.filter(r => !hiddenScoreModels.has(r.model));
+
   // 按 prompt_id 分组
   const groups = {};
-  allData.forEach(r => {
+  visibleData.forEach(r => {
     const pid = r.prompt_id;
     if (!groups[pid]) groups[pid] = [];
     groups[pid].push(r);
@@ -238,11 +248,23 @@ function renderModelCard(r, pid, idx) {
   }
 
   const score = r.quality_score || 0;
+  const uscore = r.usability_score || 0;
+  const cscore = r.consistency_score || 0;
   const notes = r.notes || '';
 
   const starsHtml = [5,4,3,2,1].map(s => `
     <input type="radio" name="score_${pid}_${idx}" id="s${pid}_${idx}_${s}" value="${s}" ${score === s ? 'checked' : ''} onchange="updateScore('${pid}',${idx},'quality_score',${s})">
     <label for="s${pid}_${idx}_${s}" title="${s}分">★</label>
+  `).join('');
+
+  const csStarsHtml = [5,4,3,2,1].map(s => `
+    <input type="radio" name="cscore_${pid}_${idx}" id="cs${pid}_${idx}_${s}" value="${s}" ${cscore === s ? 'checked' : ''} onchange="updateScore('${pid}',${idx},'consistency_score',${s})">
+    <label for="cs${pid}_${idx}_${s}" title="${s}分">★</label>
+  `).join('');
+
+  const usStarsHtml = [5,4,3,2,1].map(s => `
+    <input type="radio" name="uscore_${pid}_${idx}" id="us${pid}_${idx}_${s}" value="${s}" ${uscore === s ? 'checked' : ''} onchange="updateScore('${pid}',${idx},'usability_score',${s})">
+    <label for="us${pid}_${idx}_${s}" title="${s}分">★</label>
   `).join('');
 
   // 截断过长的输出
@@ -253,7 +275,7 @@ function renderModelCard(r, pid, idx) {
   return `
   <div class="model-card">
     <div class="model-header">
-      <span class="model-name">模型 ${r.model}</span>
+      <span class="model-name">${modelDisplayNames[r.model] || r.model}</span>
       <button class="preview-btn" onclick="previewOutput('${pid}',${idx})" title="在新窗口预览效果">预览</button>
       <span class="model-stats">
         <span>耗时 ${r.latency_s}s</span>
@@ -267,6 +289,14 @@ function renderModelCard(r, pid, idx) {
         <label>质量评分:</label>
         <div class="score-stars">${starsHtml}</div>
       </div>
+      <div class="score-group">
+        <label>一致性:</label>
+        <div class="score-stars">${csStarsHtml}</div>
+      </div>
+      <div class="score-group">
+        <label>可用性:</label>
+        <div class="score-stars">${usStarsHtml}</div>
+      </div>
       <textarea class="notes-input" placeholder="备注（可选）" 
         onchange="updateScore('${pid}',${idx},'notes',this.value)">${escapeHtml(notes)}</textarea>
     </div>
@@ -279,7 +309,7 @@ function updateScore(pid, idx, field, value) {
   for (let i = 0; i < allData.length; i++) {
     if (allData[i].prompt_id === pid) {
       if (count === idx) {
-        allData[i][field] = field === 'quality_score' ? parseInt(value) : value;
+        allData[i][field] = (field === 'quality_score' || field === 'usability_score' || field === 'consistency_score') ? parseInt(value) : value;
         break;
       }
       count++;
@@ -334,10 +364,10 @@ function renderOutputForPreview(output) {
 }
 
 function openCompare(pid) {
-  // 收集该 prompt 下所有非 error 记录
+  // 收集该 prompt 下所有非 error 记录，排除隐藏模型
   const records = [];
   for (let i = 0; i < allData.length; i++) {
-    if (allData[i].prompt_id === pid && !allData[i].error && allData[i].output) {
+    if (allData[i].prompt_id === pid && !allData[i].error && allData[i].output && !hiddenScoreModels.has(allData[i].model)) {
       records.push({ ...allData[i], _idx: i });
     }
   }
@@ -357,14 +387,26 @@ function openCompare(pid) {
        <label for="cms${colIdx}_${s}" title="${s}分">★</label>`
     ).join('');
 
+    const uscore = r.usability_score || 0;
+    const cscore = r.consistency_score || 0;
+    const usStarsHtml = [5,4,3,2,1].map(s =>
+      `<input type="radio" name="cmp_uscore_${colIdx}" id="cmus${colIdx}_${s}" value="${s}" ${uscore === s ? 'checked' : ''} onchange="cmpScore(${colIdx},'usability_score',${s})">
+       <label for="cmus${colIdx}_${s}" title="${s}分">★</label>`
+    ).join('');
+
+    const csStarsHtml = [5,4,3,2,1].map(s =>
+      `<input type="radio" name="cmp_cscore_${colIdx}" id="cmcs${colIdx}_${s}" value="${s}" ${cscore === s ? 'checked' : ''} onchange="cmpScore(${colIdx},'consistency_score',${s})">
+       <label for="cmcs${colIdx}_${s}" title="${s}分">★</label>`
+    ).join('');
+
     const panelBody = preview.type === 'html'
-      ? `<iframe class="html-frame" srcdoc="${escapeHtml(preview.html)}"></iframe>`
+      ? `<iframe class="html-frame" srcdoc="${preview.html.replace(/"/g, '&quot;')}"></iframe>`
       : `<div class="md-body">${preview.html}</div>`;
 
     return `
     <div class="cmp-panel">
       <div class="cmp-panel-header">
-        <span class="cmp-model-name">模型 ${r.model}</span>
+        <span class="cmp-model-name">${modelDisplayNames[r.model] || r.model}</span>
         <span class="cmp-stats">耗时${r.latency_s}s · 输入${r.tokens_input}t · 输出${r.tokens_output}t</span>
       </div>
       <div class="cmp-output">${panelBody}</div>
@@ -372,6 +414,14 @@ function openCompare(pid) {
         <div class="score-group">
           <label>质量评分:</label>
           <div class="score-stars">${starsHtml}</div>
+        </div>
+        <div class="score-group">
+          <label>一致性:</label>
+          <div class="score-stars">${csStarsHtml}</div>
+        </div>
+        <div class="score-group">
+          <label>可用性:</label>
+          <div class="score-stars">${usStarsHtml}</div>
         </div>
         <textarea class="notes-input" placeholder="备注" onchange="cmpScore(${colIdx},'notes',this.value)">${notes}</textarea>
       </div>
@@ -404,7 +454,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cmp-model-name { font-weight: 600; font-size: 14px; }
 .cmp-stats { font-size: 11px; color: #64748b; margin-left: auto; }
 .cmp-output { flex: 1; min-height: 0; overflow: hidden; }
-.cmp-output .md-body { max-height: 65vh; overflow-y: auto; padding: 14px 16px; font-size: 14px; line-height: 1.7; color: #1e293b; }
+.cmp-output .md-body { height: 100%; overflow-y: auto; padding: 14px 16px; font-size: 14px; line-height: 1.7; color: #1e293b; }
 .cmp-output .md-body h1 { font-size: 1.5em; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin: 18px 0 8px; }
 .cmp-output .md-body h2 { font-size: 1.25em; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin: 14px 0 6px; }
 .cmp-output .md-body h3 { font-size: 1.1em; margin: 12px 0 4px; }
@@ -420,7 +470,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .cmp-output .md-body a { color: #4f46e5; }
 .cmp-output .md-body hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
 .cmp-output .md-body .think { background: #f0f9ff; border-left: 3px solid #7dd3fc; padding: 6px 12px; margin: 8px 0; border-radius: 0 6px 6px 0; font-size: 0.9em; color: #0c4a6e; }
-.cmp-output .html-frame { width: 100%; height: 65vh; border: none; }
+.cmp-output .html-frame { width: 100%; height: 100%; border: none; }
 .cmp-score-row { padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-top: 1px solid #e2e8f0; flex-shrink: 0; }
 .cmp-score-row .score-group { display: flex; align-items: center; gap: 4px; }
 .cmp-score-row .score-group label { font-size: 12px; font-weight: 500; color: #334155; white-space: nowrap; }
@@ -455,7 +505,7 @@ ${'<scr' + 'ipt>'}
   function cmpScore(colIdx, field, value) {
     const dataIdx = IDX_MAP[colIdx];
     if (window.opener && window.opener.allData) {
-      window.opener.allData[dataIdx][field] = field === 'quality_score' ? parseInt(value) : value;
+      window.opener.allData[dataIdx][field] = (field === 'quality_score' || field === 'usability_score' || field === 'consistency_score') ? parseInt(value) : value;
       window.opener.markUnsaved();
     }
     dirty = true;
@@ -502,7 +552,7 @@ ${'</scr' + 'ipt>'}
 </html>`;
 
   const blob = new Blob([cmpHtml], { type: 'text/html;charset=utf-8' });
-  window.open(URL.createObjectURL(blob), '_blank', 'width=1100,height=800');
+  window.open(URL.createObjectURL(blob), '_blank', 'width=' + screen.availWidth + ',height=' + screen.availHeight + ',left=0,top=0');
 }
 
 function previewOutput(pid, idx) {
@@ -580,6 +630,11 @@ function renderMarkdown(md) {
   // 保护 <think>...</think> 块
   html = html.replace(/<think>([\s\S]*?)<\/think>/g, (_, content) => {
     return `<div class="think">思考 ${escapeHtml(content.trim())}</div>`;
+  });
+
+  // 保护 <tool_calls>...</tool_calls> 块（DS V4 Pro 输出格式）
+  html = html.replace(/<tool_calls>([\s\S]*?)<\/tool_calls>/g, (_, content) => {
+    return `<div class="tool-calls"><strong>工具调用</strong><pre>${escapeHtml(content.trim())}</pre></div>`;
   });
 
   // Tables (must be before line processing)

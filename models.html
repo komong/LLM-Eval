@@ -15,7 +15,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .sidebar-nav a:hover { color: #1e293b; background: #f1f5f9; }
 .sidebar-nav a.active { color: #4f46e5; background: #eef2ff; border-left-color: #4f46e5; }
 
-.main { margin-left: 220px; flex: 1; padding: 24px 32px; min-height: 100vh; max-width: 900px; }
+.main { margin-left: 220px; flex: 1; padding: 24px 32px; min-height: 100vh; }
+
+.two-col { display: flex; gap: 24px; }
+.col-left { flex: 1; min-width: 0; }
+.col-right { flex: 1; min-width: 0; }
 
 .section { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 .section h2 { font-size: 17px; margin-bottom: 8px; color: #1e293b; }
@@ -45,8 +49,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .toggle-sm input:checked + label { background: #818cf8; }
 .toggle-sm input:checked + label::after { transform: translateX(16px); }
 
-.display-toggles { display: flex; gap: 16px; align-items: center; flex-shrink: 0; }
-.display-toggle-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #64748b; white-space: nowrap; }
+.display-toggles { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; flex-shrink: 0; }
+.display-toggle-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #475569; white-space: nowrap; }
 
 .save-bar { position: fixed; bottom: 20px; right: 20px; z-index: 200; }
 .save-bar button { padding: 14px 32px; background: #4f46e5; color: #fff; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(79,70,229,0.4); transition: all 0.2s; }
@@ -58,7 +62,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .status-bar .dot.saved { background: #16a34a; }
 .status-bar .dot.unsaved { background: #f59e0b; }
 
-.loading { text-align: center; padding: 60px; color: #94a3b8; font-size: 15px; }
+.col-header { font-size: 12px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+.col-right .model-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.col-right .model-row .col-label { font-size: 13px; color: #475569; flex-shrink: 0; min-width: 40px; }
+
+.name-edit { display: flex; align-items: center; gap: 6px; }
+.name-edit .name-text { font-weight: 600; font-size: 15px; color: #1e293b; cursor: pointer; border-bottom: 1px dashed transparent; transition: all 0.15s; }
+.name-edit .name-text:hover { border-bottom-color: #4f46e5; color: #4f46e5; }
+.name-edit input { font-weight: 600; font-size: 15px; border: 1px solid #4f46e5; border-radius: 4px; padding: 2px 6px; width: 180px; outline: none; }
+.name-edit .edit-hint { font-size: 11px; color: #94a3b8; }
 
 @media (max-width: 700px) {
   .sidebar { width: 60px; }
@@ -97,19 +109,21 @@ const API = '';
 let modelConfig = {};
 let originalConfig = '';
 let displayOverrides = {};
+let displayNames = {};
 
 (async function init() {
   try {
     const resp = await fetch(API + '/api/models');
     const data = await resp.json();
     modelConfig = data;
-    // 提取显示开关状态
     displayOverrides = {};
+    displayNames = {};
     for (const [name, cfg] of Object.entries(data)) {
       displayOverrides[name] = {
         show_in_summary: cfg.show_in_summary !== false,
         show_in_score: cfg.show_in_score !== false,
       };
+      displayNames[name] = cfg.display_name || '';
     }
     originalConfig = JSON.stringify(data);
     render();
@@ -119,10 +133,11 @@ let displayOverrides = {};
 })();
 
 function render() {
-  let html = `
+  // 左栏 HTML：测试模型管理
+  let leftHtml = `
   <div class="section">
     <h2>测试模型管理</h2>
-    <p class="desc">开启/关闭参与 benchmark 测试的模型。右侧小开关控制该模型在汇总页和评分页的显示。修改后点击右下角「保存配置」生效。</p>`;
+    <p class="desc">开启/关闭参与 benchmark 测试的模型</p>`;
 
   for (const [name, cfg] of Object.entries(modelConfig)) {
     const enabled = cfg.enabled !== false;
@@ -131,33 +146,22 @@ function render() {
       ? `输入 $${cfg.price_input} · 输出 $${cfg.price_output} /1M tokens`
       : '';
     const tpBadge = cfg.is_token_plan ? '<span class="tp-badge">Token Plan</span>' : '';
+    const dname = displayNames[name] || '';
 
-    html += `
-    <div class="model-row${disabledClass}">
+    leftHtml += `
+    <div class="model-row${disabledClass}" id="row_${name}">
       <div class="model-info">
-        <div class="model-name">${escapeHtml(name)} ${tpBadge}</div>
+        <div class="name-edit">
+          <span class="name-text" onclick="startEditName('${name}')" title="点击修改显示名称">${escapeHtml(dname || name)}</span>
+          ${tpBadge}
+          ${dname ? `<span class="edit-hint">(${escapeHtml(name)})</span>` : ''}
+        </div>
         <div class="model-meta">
           <span>provider: ${escapeHtml(cfg.provider)}</span>
           <span>model_id: ${escapeHtml(cfg.model_id)}</span>
           ${cfg.thinking !== undefined ? `<span>thinking: ${cfg.thinking}</span>` : ''}
         </div>
         ${priceStr ? `<div class="model-price">${priceStr}</div>` : ''}
-      </div>
-      <div class="display-toggles">
-        <div class="display-toggle-item">
-          <span>汇总</span>
-          <div class="toggle-sm">
-            <input type="checkbox" id="sum_${name}" ${displayOverrides[name]?.show_in_summary ? 'checked' : ''} onchange="toggleDisplay('${name}', 'show_in_summary', this.checked)">
-            <label for="sum_${name}"></label>
-          </div>
-        </div>
-        <div class="display-toggle-item">
-          <span>评分</span>
-          <div class="toggle-sm">
-            <input type="checkbox" id="scr_${name}" ${displayOverrides[name]?.show_in_score ? 'checked' : ''} onchange="toggleDisplay('${name}', 'show_in_score', this.checked)">
-            <label for="scr_${name}"></label>
-          </div>
-        </div>
       </div>
       <div class="toggle">
         <input type="checkbox" id="chk_${name}" ${enabled ? 'checked' : ''} onchange="toggleModel('${name}', this.checked)">
@@ -166,11 +170,48 @@ function render() {
     </div>`;
   }
 
-  html += `
-    <div class="status-bar">
-      <span class="dot" id="statusDot"></span>
-      <span id="statusText">配置已加载</span>
-    </div>
+  leftHtml += '</div>';
+
+  // 右栏 HTML：列表显示管理
+  let rightHtml = `
+  <div class="section">
+    <h2>列表显示管理</h2>
+    <p class="desc">控制模型在汇总页和评分页的显示</p>`;
+
+  for (const [name, cfg] of Object.entries(modelConfig)) {
+    const enabled = cfg.enabled !== false;
+    rightHtml += `
+    <div class="model-row${enabled ? '' : ' disabled'}" id="displayRow_${name}">
+      <span class="col-label">${escapeHtml(displayNames[name] || name)}</span>
+      <div class="display-toggles">
+        <div class="display-toggle-item">
+          <span>汇总页显示</span>
+          <div class="toggle-sm">
+            <input type="checkbox" id="sum_${name}" ${displayOverrides[name]?.show_in_summary && enabled ? 'checked' : ''} ${enabled ? '' : 'disabled'} onchange="toggleDisplay('${name}', 'show_in_summary', this.checked)">
+            <label for="sum_${name}"></label>
+          </div>
+        </div>
+        <div class="display-toggle-item">
+          <span>评分页显示</span>
+          <div class="toggle-sm">
+            <input type="checkbox" id="scr_${name}" ${displayOverrides[name]?.show_in_score && enabled ? 'checked' : ''} ${enabled ? '' : 'disabled'} onchange="toggleDisplay('${name}', 'show_in_score', this.checked)">
+            <label for="scr_${name}"></label>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  rightHtml += '</div>';
+
+  const html = `
+  <div class="two-col">
+    <div class="col-left">${leftHtml}</div>
+    <div class="col-right">${rightHtml}</div>
+  </div>
+  <div class="status-bar">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">配置已加载</span>
   </div>`;
 
   document.getElementById('content').innerHTML = html;
@@ -179,8 +220,63 @@ function render() {
 
 function toggleModel(name, enabled) {
   modelConfig[name].enabled = enabled;
-  const row = document.querySelector(`#chk_${name.replace(/[^a-zA-Z0-9_-]/g, '\\$&')}`).closest('.model-row');
-  row.classList.toggle('disabled', !enabled);
+  // 左栏
+  const leftRow = document.getElementById('row_' + name);
+  if (leftRow) leftRow.classList.toggle('disabled', !enabled);
+  // 右栏：disabled 模型不可选，且取消勾选
+  const rightRow = document.getElementById('displayRow_' + name);
+  if (rightRow) {
+    rightRow.classList.toggle('disabled', !enabled);
+    const sumCb = document.getElementById('sum_' + name);
+    const scrCb = document.getElementById('scr_' + name);
+    if (!enabled) {
+      if (sumCb) { sumCb.disabled = true; sumCb.checked = false; }
+      if (scrCb) { scrCb.disabled = true; scrCb.checked = false; }
+      displayOverrides[name] = { show_in_summary: false, show_in_score: false };
+    } else {
+      if (sumCb) { sumCb.disabled = false; sumCb.checked = displayOverrides[name]?.show_in_summary !== false; }
+      if (scrCb) { scrCb.disabled = false; scrCb.checked = displayOverrides[name]?.show_in_score !== false; }
+    }
+  }
+  markUnsaved();
+}
+
+function startEditName(name) {
+  const row = document.getElementById('row_' + name);
+  const nameEdit = row.querySelector('.name-edit');
+  const current = displayNames[name] || name;
+  nameEdit.innerHTML = `
+    <input type="text" value="${escapeHtml(current)}" id="editInput_${name}"
+      onblur="finishEditName('${name}', this.value)"
+      onkeydown="if(event.key==='Enter')this.blur()">
+    <span class="edit-hint">(回车确认)</span>
+  `;
+  const input = document.getElementById('editInput_' + name);
+  input.focus();
+  input.select();
+}
+
+function finishEditName(name, newName) {
+  newName = newName.trim();
+  if (newName === name) newName = ''; // 与原 key 相同则清空（不设 display_name）
+  displayNames[name] = newName;
+  // 更新左栏显示
+  const row = document.getElementById('row_' + name);
+  if (row) {
+    const nameEdit = row.querySelector('.name-edit');
+    const tpBadge = modelConfig[name].is_token_plan ? '<span class="tp-badge">Token Plan</span>' : '';
+    nameEdit.innerHTML = `
+      <span class="name-text" onclick="startEditName('${name}')" title="点击修改显示名称">${escapeHtml(newName || name)}</span>
+      ${tpBadge}
+      ${newName ? `<span class="edit-hint">(${escapeHtml(name)})</span>` : ''}
+    `;
+  }
+  // 更新右栏标签
+  const rightRow = document.getElementById('displayRow_' + name);
+  if (rightRow) {
+    const label = rightRow.querySelector('.col-label');
+    if (label) label.textContent = newName || name;
+  }
   markUnsaved();
 }
 
@@ -217,6 +313,7 @@ async function saveConfig() {
       enabled: cfg.enabled !== false,
       show_in_summary: displayOverrides[name]?.show_in_summary !== false,
       show_in_score: displayOverrides[name]?.show_in_score !== false,
+      display_name: displayNames[name] || '',
     };
   }
 

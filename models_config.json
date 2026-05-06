@@ -2,7 +2,7 @@
   "deepseek-v4-flash": {
     "enabled": true,
     "show_in_summary": false,
-    "show_in_score": true
+    "show_in_score": false
   },
   "deepseek-v4-flash-think": {
     "enabled": false,

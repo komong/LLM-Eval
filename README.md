@@ -1,23 +1,41 @@
 # LLM Benchmark
 
-对同一批真实需求，同时测试多个模型，自动记录耗时、费用、token 用量，事后统一评分对比。
+对同一批真实需求，同时测试多个 LLM 模型，自动采集耗时、费用、Token 用量等指标，提供 Web 端评分与汇总对比。
 
 ## 快速开始
 
-### 1. 安装依赖
+### 1. 环境要求
+- Python 3.10+
+- 可选：Claude Code CLI（如需测试 claude-code 模型）
+- 可选：OpenAI Codex CLI（如需测试 codex 模型）`npm i -g @openai/codex`
+
+### 2. 安装依赖
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. 配置 API Key
+### 3. 配置 API Key
 ```bash
 cp .env.example .env
-# 编辑 .env，填入你的 API Key
+# 编辑 .env，填入你需要的 API Key（至少配一个）
 ```
 
-### 3. 跑测试
+支持的模型：
+| 模型 | 环境变量 | 说明 |
+|------|----------|------|
+| deepseek-v4-flash | `DEEPSEEK_API_KEY` | DeepSeek V4 Flash |
+| deepseek-v4-pro | `DEEPSEEK_API_KEY` | DeepSeek V4 Pro |
+| minimax (M2.5) | `MINIMAX_API_KEY` + `MINIMAX_GROUP_ID` | MiniMax Token Plan |
+| minimax-m2.7 | `MINIMAX_API_KEY` + `MINIMAX_GROUP_ID` | MiniMax M2.7 |
+| claude-sonnet | `CLAUDE_API_KEY` | Claude Sonnet 4.5 |
+| claude-code | 需安装 Claude Code CLI | 通过 CLI 调用 |
+| codex | 需安装 `@openai/codex` | 通过 CLI 调用 |
+
+仅配置了有效 API Key 的模型才会运行，未配置的自动跳过。
+
+### 4. 运行测试
 ```bash
-# 跑所有模型 × 所有 prompt
+# 跑所有已配置 Key 的模型 × 所有 prompt
 python runner.py
 
 # 只跑指定模型
@@ -26,23 +44,31 @@ python runner.py --model deepseek-v4-flash
 # 只跑指定场景
 python runner.py --scene 前端开发
 
-# 只跑指定 prompt
-python runner.py --prompt-id frontend_001
+# 强制重新运行（忽略已有结果）
+python runner.py --fresh
 ```
 
-### 4. 查看结果 & 评分
+支持增量测试：已有结果自动复用，只跑新增/未完成的组合。
+
+### 5. 查看结果 & 评分
+
+**Web 界面（推荐）**：
 ```bash
-# 查看最新结果报告
-python report.py
+python score_server.py
+# 自动打开浏览器 → http://127.0.0.1:8765
+```
 
-# 查看指定结果
-python report.py --file results/run_20260506_120000.json
+Web 端功能：
+- **评分页** (`/`) — 逐条查看模型输出，打质量分（1-5）和可用度
+- **汇总页** (`/summary.html`) — 所有历史结果汇总对比
+- **模型管理** (`/models.html`) — 启用/禁用模型，控制汇总页显示
+- **计费设置** (`/billing.html`) — 配置汇率（USD/RMB）、Token Plan 费用统计
 
-# 进入评分模式（看输出，打质量分）
-python report.py --file results/run_20260506_120000.json --score
-
-# 汇总所有历史结果对比
-python report.py --compare
+**命令行**：
+```bash
+python report.py                           # 查看最新结果
+python report.py --compare                 # 汇总历史对比
+python report.py --file results/xxx.json --score  # 命令行评分
 ```
 
 ## 添加新 Prompt
@@ -57,19 +83,24 @@ python report.py --compare
 ```
 
 ## 添加新模型
-编辑 `runner.py` 中的 `MODELS` 字典，按现有格式添加即可。
+1. 在 `runner.py` 的 `MODELS` 字典中添加模型配置
+2. 实现对应的 `call_xxx()` 异步函数
+3. 在 `score_server.py` 的 `MODELS_DETAIL` 和 `ALL_MODELS` 中注册
 
 ## 目录结构
 ```
 llm-benchmark/
-├── prompts.json          # 测试用的需求原文
-├── results/              # 每次测试的原始输出（自动生成）
-├── runner.py             # 主程序
-├── report.py             # 报告 & 评分 (命令行)
-├── score_server.py       # 评分 HTTP 服务
+├── prompts.json          # 测试需求
+├── runner.py             # 核心测试引擎
+├── report.py             # 命令行报告 & 评分
+├── score_server.py       # Web 评分服务
 ├── score.html            # 评分页面
-├── summary.html          # 汇总页
-├── requirements.txt
-├── .env.example
-└── .env                  # 你的 API Key（不要提交到 git）
+├── summary.html          # 汇总对比页
+├── models.html           # 模型管理页
+├── billing.html          # 计费设置页
+├── call_claude_code.py   # Claude Code CLI 调用器
+├── call_codex.py         # Codex CLI 调用器
+├── requirements.txt      # Python 依赖
+├── .env.example          # API Key 模板
+└── test/                 # 单元测试
 ```
